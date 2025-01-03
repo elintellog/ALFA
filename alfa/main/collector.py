@@ -59,8 +59,10 @@ class Collector:
 
     SCOPES = config["scopes"]
 
-    def __init__(self) -> None:
+    def __init__(self, creds_path=None, token_path=None) -> None:
         self.api_ready = False
+        self.creds_path = creds_path
+        self.token_path = token_path
         pass
 
     def __init_api_creds(self):
@@ -83,21 +85,21 @@ class Collector:
 
     def get_credentials(self):
         creds = False
-        if os.path.exists(token_path):
-            creds = Credentials.from_authorized_user_file(token_path)
+        if os.path.exists(self.token_path or token_path):
+            creds = Credentials.from_authorized_user_file(self.token_path or token_path)
 
         if not creds or not creds.valid:
-            if not os.path.exists(creds_path):
+            if not os.path.exists(self.creds_path or creds_path):
                 print(creds_instructions)
                 raise ValueError("missing config/credentials.json")
             if creds and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    creds_path, self.SCOPES
+                    self.creds_path or creds_path, self.SCOPES
                 )
                 creds = flow.run_local_server(port=PORT)
-            with open(token_path, "w") as token:
+            with open(self.token_path or token_path, "w") as token:
                 token.write(creds.to_json())
         return creds
 
@@ -119,6 +121,8 @@ class Collector:
         used by the .query method
         collects activities from a single logtype, and returns them as a list
         """
+        if not self.api_ready:  # first initialize the api
+            self.__init_api_creds()        
         activities = self.service.activities()
         req = activities.list(
             userKey=user,
